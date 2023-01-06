@@ -15,19 +15,19 @@ With this tool you can measure S3's performance from any location, using differe
 
 #### macOS
 ```
-curl -OL https://github.com/dvassallo/s3-benchmark/raw/master/build/darwin-amd64/s3-benchmark
+curl -OL https://github.com/wangzhihao/s3-benchmark/raw/master/build/darwin-amd64/s3-benchmark
 ```
 
 #### Linux 64-bit x86
 
 ```
-curl -OL https://github.com/dvassallo/s3-benchmark/raw/master/build/linux-amd64/s3-benchmark
+curl -OL https://github.com/wangzhihao/s3-benchmark/raw/master/build/linux-amd64/s3-benchmark
 ```
 
 #### Linux 64-bit ARM
 
 ```
-curl -OL https://github.com/dvassallo/s3-benchmark/raw/master/build/linux-arm64/s3-benchmark
+curl -OL https://github.com/wangzhihao/s3-benchmark/raw/master/build/linux-arm64/s3-benchmark
 ```
 
 ### Credentials
@@ -52,28 +52,17 @@ Or run the full test (takes a few hours):
 ./s3-benchmark -full
 ```
 
-See [this](https://github.com/dvassallo/s3-benchmark/blob/master/main.go#L123-L134) for all the other options.
+See [this](https://github.com/wangzhihao/s3-benchmark/blob/master/main.go#L123-L134) for all the other options.
 
 ### Build
 
-1. Install [Go](https://golang.org/)
-    ```
-    sudo apt-get install golang-go
-    ```
-    or
-    ```
-    sudo yum install go
-    ```
-    may work too. 
-    
-2. Setup Go environment variables (Usually GOPATH and GOBIN) and test Go installation 
-3. Clone the repo
-4. Install [```dep```](https://golang.github.io/dep/) 
-	```
-	go get -u github.com/golang/dep/cmd/dep
-	```
-5. Go to source directory and run ```dep ensure```
-6. Run ```go run main.go```
+```sh
+# To fix error:  x509: certificate is valid for xxx, not proxy.golang.org
+go env -w GOPROXY=direct
+
+# To workaround https://github.com/golang/go/issues/44129
+GOFLAGS=-mod=mod ./go-build-all
+```
 
 ## S3 to EC2 Bandwidth
 

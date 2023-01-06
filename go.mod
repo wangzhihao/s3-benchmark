@@ -1,8 +1,9 @@
-module github.com/dvassallo/s3-benchmark
+module github.com/wangzhihao/s3-benchmark
 
-go 1.13
+go 1.18
 
 require (
-	github.com/aws/aws-sdk-go-v2 v0.7.0
-	github.com/schollz/progressbar/v2 v2.0.0-20190307141100-7e454dc2feed
+	github.com/aws/aws-sdk-go-v2 v0.7.0 
+	github.com/schollz/progressbar/v3 v3.13.0
 )
+
