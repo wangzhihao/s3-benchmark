@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"crypto/sha1"
+    "context"
 	"encoding/csv"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/external"
+    "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+    "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/schollz/progressbar/v3"
 	"io"
 	"io/ioutil"
@@ -96,7 +98,7 @@ var csvResults string
 var createBucket bool
 
 // the S3 SDK client
-var s3Client *s3.S3
+var s3Client *s3.Client
 
 // program entry point
 func main() {
@@ -189,7 +191,7 @@ func parseFlags() {
 
 func setupS3Client() {
 	// gets the AWS credentials from the default file or from the EC2 instance profile
-	cfg, err := external.LoadDefaultAWSConfig()
+    cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		panic("Unable to load AWS SDK config: " + err.Error())
 	}
@@ -199,7 +201,8 @@ func setupS3Client() {
 
 	// set the endpoint in the configuration
 	if endpoint != "" {
-		cfg.EndpointResolver = aws.ResolveWithEndpointURL(endpoint)
+        panic("not supported now.")
+		// cfg.EndpointResolver = aws.ResolveWithEndpointURL(endpoint)
 	}
 
 	// set a 3-minute timeout for all S3 calls, including downloading the body
@@ -208,34 +211,35 @@ func setupS3Client() {
 	}
 
 	// crete the S3 client
-	s3Client = s3.New(cfg)
+	s3Client = s3.NewFromConfig(cfg)
 
 	// custom endpoints don't generally work with the bucket in the host prefix
-	if endpoint != "" {
-		s3Client.ForcePathStyle = true
-	}
+	// if endpoint != "" {
+	//	s3Client.ForcePathStyle = true
+	//}
 }
 
 func setup() {
 	fmt.Print("\n--- \033[1;32mSETUP\033[0m --------------------------------------------------------------------------------------------------------------------\n\n")
 	if createBucket {
-		// try to create the S3 bucket
-		createBucketReq := s3Client.CreateBucketRequest(&s3.CreateBucketInput{
-			Bucket: aws.String(bucketName),
-			CreateBucketConfiguration: &s3.CreateBucketConfiguration{
-				LocationConstraint: s3.NormalizeBucketLocation(s3.BucketLocationConstraint(region)),
-			},
-		})
+
+        var bucketConfig *types.CreateBucketConfiguration
 
 		// AWS S3 has this peculiar issue in which if you want to create bucket in us-east-1 region, you should NOT specify 
 		// any location constraint. https://github.com/boto/boto3/issues/125
-		if strings.ToLower(region) == "us-east-1" {
-			createBucketReq = s3Client.CreateBucketRequest(&s3.CreateBucketInput{
-				Bucket: aws.String(bucketName),
-			})
-		}
+        if strings.ToLower(region) == "us-east-1" {
+            bucketConfig = nil
+        } else {
+            bucketConfig = &types.CreateBucketConfiguration{
+                LocationConstraint: types.BucketLocationConstraint(region),
+            }
+        }
 
-		_, err := createBucketReq.Send()
+		// try to create the S3 bucket
+        _, err := s3Client.CreateBucket(context.TODO(), &s3.CreateBucketInput{
+			Bucket: aws.String(bucketName),
+			CreateBucketConfiguration: bucketConfig,
+		})
 
 		// if the error is because the bucket already exists, ignore the error
 		if err != nil && !strings.Contains(err.Error(), "BucketAlreadyOwnedByYou:") {
@@ -270,12 +274,10 @@ func setup() {
 			key := generateS3Key(hostname, t, objectSize)
 
 			// do a HeadObject request to avoid uploading the object if it already exists from a previous test run
-			headReq := s3Client.HeadObjectRequest(&s3.HeadObjectInput{
+			_, err := s3Client.HeadObject(context.TODO(), &s3.HeadObjectInput{
 				Bucket: aws.String(bucketName),
 				Key:    aws.String(key),
 			})
-
-			_, err := headReq.Send()
 
 			// if no error, then the object exists, so skip this one
 			if err == nil {
@@ -291,13 +293,11 @@ func setup() {
 			payload := make([]byte, objectSize)
 
 			// do a PutObject request to create the object
-			putReq := s3Client.PutObjectRequest(&s3.PutObjectInput{
+			_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
 				Bucket: aws.String(bucketName),
 				Key:    aws.String(key),
 				Body:   bytes.NewReader(payload),
 			})
-
-			_, err = putReq.Send()
 
 			// if the put fails, exit
 			if err != nil {
@@ -354,13 +354,11 @@ func runBenchmark() {
 		key := "results/" + csvResults + "-" + instanceType
 
 		// do the PutObject request
-		putReq := s3Client.PutObjectRequest(&s3.PutObjectInput{
+        _, err := s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    &key,
 			Body:   bytes.NewReader(b.Bytes()),
 		})
-
-		_, err := putReq.Send()
 
 		// if the request fails, exit
 		if err != nil {
@@ -392,12 +390,10 @@ func execTest(threadCount int, payloadSize uint64, runNumber int, csvRecords [][
 				latencyTimer := time.Now()
 
 				// do the GetObject request
-				req := s3Client.GetObjectRequest(&s3.GetObjectInput{
+                resp, err := s3Client.GetObject(context.TODO(), &s3.GetObjectInput{
 					Bucket: aws.String(bucketName),
 					Key:    aws.String(key),
 				})
-
-				resp, err := req.Send()
 
 				// if a request fails, exit
 				if err != nil {
@@ -590,12 +586,10 @@ func cleanup() {
 			key := generateS3Key(hostname, t, payloadSize)
 
 			// make a DeleteObject request
-			headReq := s3Client.DeleteObjectRequest(&s3.DeleteObjectInput{
+            _, err := s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 				Bucket: aws.String(bucketName),
 				Key:    aws.String(key),
 			})
-
-			_, err := headReq.Send()
 
 			// if the object doesn't exist, ignore the error
 			if err != nil && !strings.HasPrefix(err.Error(), "NotFound: Not Found") {
